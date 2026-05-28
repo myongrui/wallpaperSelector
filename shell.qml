@@ -21,15 +21,24 @@ ShellRoot {
     property int selectedIndex: 0
     property string originalWallpaper: ""
 
-    function applyWallpaper(path) {
-        applyProcess.command = ["hyprctl", "hyprpaper", "wallpaper", "eDP-1, " + path + ", cover"]
-        applyProcess.running = true
+    function applyWallpaper() {
+        previewDebounce.restart()
+    }
+
+    Timer {
+        id: previewDebounce
+        interval: 150
+        repeat: false
+        onTriggered: {
+            if (wallpaperModel.count === 0) return
+            var path = wallpaperModel.get(root.selectedIndex).imagePath
+            applyProcess.exec(["hyprctl", "hyprpaper", "wallpaper", "eDP-1, " + path + ", cover"])
+        }
     }
 
     function revertAndQuit() {
         if (root.originalWallpaper !== "") {
-            revertProcess.command = ["hyprctl", "hyprpaper", "wallpaper", "eDP-1, " + root.originalWallpaper + ", cover"]
-            revertProcess.running = true
+            revertProcess.exec(["hyprctl", "hyprpaper", "wallpaper", "eDP-1, " + root.originalWallpaper + ", cover"])
         } else {
             Qt.quit()
         }
@@ -71,9 +80,7 @@ ShellRoot {
 
     Process {
         id: revertProcess
-        onRunningChanged: {
-            if (!running) Qt.quit()
-        }
+        onExited: Qt.quit()
         stderr: SplitParser { onRead: function(line) { console.log("ERR:", line) } }
     }
 
@@ -115,25 +122,31 @@ ShellRoot {
                     case Qt.Key_Enter:
                         Qt.quit()
                         break
-                    case Qt.Key_Left:
-                        root.selectedIndex = Math.max(0, root.selectedIndex - 1)
+                    case Qt.Key_Left: {
+                        var lRowStart = Math.floor(root.selectedIndex / root.columns) * root.columns
+                        var lRowEnd = Math.min(lRowStart + root.columns - 1, count - 1)
+                        root.selectedIndex = root.selectedIndex <= lRowStart ? lRowEnd : root.selectedIndex - 1
                         grid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
-                        root.applyWallpaper(wallpaperModel.get(root.selectedIndex).imagePath)
+                        root.applyWallpaper()
                         break
-                    case Qt.Key_Right:
-                        root.selectedIndex = Math.min(count - 1, root.selectedIndex + 1)
+                    }
+                    case Qt.Key_Right: {
+                        var rRowStart = Math.floor(root.selectedIndex / root.columns) * root.columns
+                        var rRowEnd = Math.min(rRowStart + root.columns - 1, count - 1)
+                        root.selectedIndex = root.selectedIndex >= rRowEnd ? rRowStart : root.selectedIndex + 1
                         grid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
-                        root.applyWallpaper(wallpaperModel.get(root.selectedIndex).imagePath)
+                        root.applyWallpaper()
                         break
+                    }
                     case Qt.Key_Up:
                         root.selectedIndex = Math.max(0, root.selectedIndex - root.columns)
                         grid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
-                        root.applyWallpaper(wallpaperModel.get(root.selectedIndex).imagePath)
+                        root.applyWallpaper()
                         break
                     case Qt.Key_Down:
                         root.selectedIndex = Math.min(count - 1, root.selectedIndex + root.columns)
                         grid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
-                        root.applyWallpaper(wallpaperModel.get(root.selectedIndex).imagePath)
+                        root.applyWallpaper()
                         break
                 }
                 event.accepted = true
@@ -167,7 +180,7 @@ ShellRoot {
                         hoverEnabled: true
                         onEntered: {
                             root.selectedIndex = index
-                            root.applyWallpaper(model.imagePath)
+                            root.applyWallpaper()
                         }
                         onClicked: Qt.quit()
                     }
