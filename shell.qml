@@ -36,6 +36,13 @@ ShellRoot {
         }
     }
 
+    function confirmAndQuit() {
+        var path = wallpaperModel.get(root.selectedIndex).imagePath
+        var sat = wallpaperModel.get(root.selectedIndex).saturation
+        var scheme = sat < 0.12 ? "scheme-monochrome" : "scheme-fidelity"
+        matugenProcess.exec(["matugen", "-t", scheme, "--source-color-index", "0", "image", path])
+    }
+
     function revertAndQuit() {
         if (root.originalWallpaper !== "") {
             revertProcess.exec(["hyprctl", "hyprpaper", "wallpaper", "eDP-1, " + root.originalWallpaper + ", cover"])
@@ -66,8 +73,8 @@ ShellRoot {
         stdout: SplitParser {
             onRead: function(line) {
                 var parts = line.trim().split("\t")
-                if (parts.length === 2)
-                    wallpaperModel.append({ imagePath: parts[0], thumbPath: parts[1] })
+                if (parts.length >= 3)
+                    wallpaperModel.append({ imagePath: parts[0], thumbPath: parts[1], saturation: parseFloat(parts[2]) })
             }
         }
     }
@@ -82,6 +89,17 @@ ShellRoot {
         id: revertProcess
         onExited: Qt.quit()
         stderr: SplitParser { onRead: function(line) { console.log("ERR:", line) } }
+    }
+
+    Process {
+        id: matugenProcess
+        onExited: themeLogoProcess.exec(["python3", root.home + "/.config/fastfetch/tint_logo.py"])
+        stderr: SplitParser { onRead: function(line) { console.log("matugen:", line) } }
+    }
+
+    Process {
+        id: themeLogoProcess
+        onExited: Qt.quit()
     }
 
     PanelWindow {
@@ -120,7 +138,7 @@ ShellRoot {
                         break
                     case Qt.Key_Return:
                     case Qt.Key_Enter:
-                        Qt.quit()
+                        root.confirmAndQuit()
                         break
                     case Qt.Key_Left: {
                         var lRowStart = Math.floor(root.selectedIndex / root.columns) * root.columns
@@ -182,7 +200,7 @@ ShellRoot {
                             root.selectedIndex = index
                             root.applyWallpaper()
                         }
-                        onClicked: Qt.quit()
+                        onClicked: root.confirmAndQuit()
                     }
                 }
 
